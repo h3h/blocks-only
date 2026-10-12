@@ -19,5 +19,6 @@
   "author": {
     "name": "Bradford Fults"
   },
-  "repository": "https://github.com/h3h/blocks-only"
+  "repository": "https://github.com/h3h/blocks-only",
+  "license": "MIT"
 }

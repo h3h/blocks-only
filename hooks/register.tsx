@@ -112,56 +112,87 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
   const unfolded = await read($, memberOf(open, { requestId: id }))
   const choice = await read($, memberOf(picked, { requestId: id }))
 
+  // One block as a row: icon, summary, the fold mark at the far edge; what it must show sits under the summary.
   const tile = (block: Block, i: number) => {
     const { icon, tone, word } = look(block)
     const more = folded(block)
     const isOpen = unfolded.includes(i)
     const must = required(block)
     const rec = block.recommended ?? -1
+    const isSettled = choice?.startsWith(`${i}:`) === true
 
     return (
-      <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={2} paddingY={1} gap={1}>
-        <Box gap={1} alignItems="center">
-          <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
-          {more === '' ? (
-            <Text bold>{block.summary}</Text>
-          ) : (
-            <Button
-              key={`fold-${i}`}
-              plain
-              label={`${isOpen ? '▾' : '▸'} ${block.summary}`}
-              onPress={() =>
-                update($, memberOf(open, { requestId: id }), (now: number[]) =>
-                  now.includes(i) ? now.filter(one => one !== i) : [...now, i],
-                )
-              }
-            />
-          )}
-          {word && <Text color={tone}>{word}</Text>}
-        </Box>
-        {must && <Text dimColor>{must}</Text>}
-        {isOpen && more !== '' && <Markdown text={more} />}
-        {(block.options ?? []).map((option, j) => {
-          const isPicked = choice === `${i}:${j}`
-          if (choice?.startsWith(`${i}:`)) {
-            return <Text dimColor={!isPicked}>{`${isPicked ? '● Picked: ' : '○ '}${option.label}`}</Text>
-          }
-
-          return (
-            <Box flexDirection="column">
-              <Button
-                key={`pick-${i}-${j}`}
-                label={`${j + 1}. ${option.label}${j === rec ? ' (recommended)' : ''}`}
-                {...(j === rec ? { variant: 'primary' as const } : {})}
-                onPress={() => pick($, id, i, j, option, asked(block))}
-              />
-              <Text dimColor>{option.effect}</Text>
+      <Box gap={2} alignItems="flex-start">
+        <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
+        <Box flexDirection="column" flexGrow={1}>
+          <Box justifyContent="space-between" gap={2}>
+            <Box gap={1} flexWrap="wrap">
+              {more === '' ? (
+                <Text>{block.summary}</Text>
+              ) : (
+                <Button
+                  key={`fold-${i}`}
+                  plain
+                  label={block.summary}
+                  onPress={() =>
+                    update($, memberOf(open, { requestId: id }), (now: number[]) =>
+                      now.includes(i) ? now.filter(one => one !== i) : [...now, i],
+                    )
+                  }
+                />
+              )}
+              {word && <Text color={tone}>{word}</Text>}
             </Box>
-          )
-        })}
-        {block.options && block.reason && (
-          <Text dimColor>{rec >= 0 ? `Why ${rec + 1}: ${block.reason}` : `No recommendation: ${block.reason}`}</Text>
-        )}
+            {more !== '' && <Text dimColor>{isOpen ? '▾' : '▸'}</Text>}
+          </Box>
+          {must && <Text dimColor>{must}</Text>}
+          {isOpen && more !== '' && (
+            <Box paddingLeft={2} paddingY={1}>
+              <Markdown text={more} />
+            </Box>
+          )}
+          {block.options && (
+            <Box flexDirection="column" marginTop={1}>
+              {block.options.map((option, j) => {
+                const isPicked = choice === `${i}:${j}`
+                const isMarked = isSettled ? isPicked : j === rec
+
+                return (
+                  <Box
+                    key={`option-${i}-${j}`}
+                    borderStyle="round"
+                    borderDimColor={!isMarked}
+                    {...(isMarked ? { borderColor: TONE.purple } : {})}
+                    {...(isSettled ? {} : { hover: { borderColor: TONE.purple } })}
+                    paddingX={2}
+                    gap={2}
+                  >
+                    <Text dimColor>{String(j + 1)}</Text>
+                    <Box flexDirection="column" flexGrow={1}>
+                      <Box gap={1} flexWrap="wrap">
+                        {isSettled ? (
+                          <Text dimColor={!isPicked}>{option.label}</Text>
+                        ) : (
+                          <Button
+                            key={`pick-${i}-${j}`}
+                            plain
+                            label={option.label}
+                            onPress={() => pick($, id, i, j, option, asked(block))}
+                          />
+                        )}
+                        {isMarked && <Text color={TONE.purple}>{isSettled ? 'picked' : 'recommended'}</Text>}
+                      </Box>
+                      <Text dimColor>{option.effect}</Text>
+                    </Box>
+                  </Box>
+                )
+              })}
+              {block.reason && (
+                <Text dimColor>{rec >= 0 ? `Why ${rec + 1}: ${block.reason}` : `No recommendation: ${block.reason}`}</Text>
+              )}
+            </Box>
+          )}
+        </Box>
       </Box>
     )
   }

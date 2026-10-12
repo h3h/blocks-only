@@ -35,7 +35,7 @@ test('a report draws as a card on desktop, folds, and takes a pick', async $ => 
   expect(await ui.find({ type: 'Markdown' })).toBeDefined()
 
   await ui.press({ key: 'pick-2-1' })
-  expect(await ui.find({ type: 'Text', text: /Picked: Leave as is/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^picked$/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -74,6 +74,6 @@ test('a report folded into a run of tool calls still draws its card', async ($, 
   expect(await ui.find({ type: 'Text', text: /used a tool/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Retries now work/ })).toBeDefined()
   await ui.press({ key: 'pick-2-1' })
-  expect(await ui.find({ type: 'Text', text: /Picked: Leave as is/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^picked$/ })).toBeDefined()
   await ui.unmount()
 })

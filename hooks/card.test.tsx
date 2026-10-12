@@ -38,7 +38,7 @@ test('a report draws as a card on desktop, folds, and takes a pick', async ($, o
   expect(await ui.find({ type: 'Text', text: /Not checked: Staging login/ })).toBeDefined()
   expect(await ui.find({ type: 'Markdown' })).toBeUndefined()
 
-  await ui.press({ key: 'fold-0' })
+  await ui.post({}, { in: 'fold:r1:0' })
   expect(await ui.find({ type: 'Markdown' })).toBeDefined()
 
   await ui.post({ text: 'Give mobile its own config.' }, { in: 'pick:r1:2:0' })

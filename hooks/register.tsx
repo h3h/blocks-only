@@ -3,6 +3,7 @@ import type { EngineInterface, Register, ResolveInput } from 'claude-code'
 
 import type { Block, Notes, Option, Report } from '../types'
 import type { OptionProps } from './option'
+import type { RowProps } from './row'
 import { MAX_STRIKES, mustReport, SCHEMA, validate } from './validate'
 
 const REPORT = 'mcp__blocks-only__report'
@@ -130,29 +131,38 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
       <Box gap={2} alignItems="flex-start">
         <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
         <Box flexDirection="column" flexGrow={1}>
-          <Box gap={1}>
-            <Box flexGrow={1} flexShrink={1}>
-              <Text>{block.summary}</Text>
-            </Box>
-            {word && (
-              <Box flexShrink={0}>
-                <Text color={tone}>{word}</Text>
+          {more !== '' && !isPlain ? (
+            <Client
+              key={`fold:${id}:${i}`}
+              module="./row.tsx"
+              width="100%"
+              props={{ summary: block.summary, word: word ?? '', tone, isOpen } satisfies RowProps}
+            />
+          ) : (
+            <Box gap={1}>
+              <Box flexGrow={1} flexShrink={1}>
+                <Text>{block.summary}</Text>
               </Box>
-            )}
-            {more !== '' && (
-              <Button
-                key={`fold-${i}`}
-                plain
-                dimColor
-                label={isOpen ? '▾' : '▸'}
-                onPress={() =>
-                  update($, memberOf(open, { requestId: id }), (now: number[]) =>
-                    now.includes(i) ? now.filter(one => one !== i) : [...now, i],
-                  )
-                }
-              />
-            )}
-          </Box>
+              {word && (
+                <Box flexShrink={0}>
+                  <Text color={tone}>{word}</Text>
+                </Box>
+              )}
+              {more !== '' && (
+                <Button
+                  key={`fold-${i}`}
+                  plain
+                  dimColor
+                  label={isOpen ? '▾' : '▸'}
+                  onPress={() =>
+                    update($, memberOf(open, { requestId: id }), (now: number[]) =>
+                      now.includes(i) ? now.filter(one => one !== i) : [...now, i],
+                    )
+                  }
+                />
+              )}
+            </Box>
+          )}
           {must && <Text dimColor>{must}</Text>}
           {isOpen && more !== '' && (
             <Box paddingLeft={2} paddingY={1}>
@@ -379,13 +389,21 @@ export const register: Register = (on, options) => {
     return <Box />
   })
 
-  // An option block was pressed: its key names the report, block and option; its data carries what to send.
+  // A press on one of the card's modules: its key names what was pressed, as kind:report:block[:option].
   on('ui.message', async ($, e, next) => {
     const [kind, report, block, index] = e.element.split(':')
-    if (kind !== 'pick' || report === undefined) return next(e)
-    const text = (e.data as { text?: unknown } | null)?.text
-    const { value } = await $.state.get({ plugin: 'blocks-only', key: 'picked', id: report } as const)
-    if (value == null) await pick($, report, Number(block), Number(index), typeof text === 'string' ? text : null)
+    const i = Number(block)
+    if (report === undefined || !Number.isInteger(i)) return next(e)
+    if (kind === 'fold') {
+      await update($, memberOf(open, { requestId: report }), (now: number[]) =>
+        now.includes(i) ? now.filter(one => one !== i) : [...now, i],
+      )
+    }
+    if (kind === 'pick') {
+      const text = (e.data as { text?: unknown } | null)?.text
+      const { value } = await $.state.get({ plugin: 'blocks-only', key: 'picked', id: report } as const)
+      if (value == null) await pick($, report, i, Number(index), typeof text === 'string' ? text : null)
+    }
 
     return next(e)
   })

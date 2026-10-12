@@ -22,6 +22,8 @@ const picked = atom({ plugin: 'blocks-only', key: 'picked' } as const, null)
 const plain = atom({ plugin: 'blocks-only', key: 'isPlain' } as const, false)
 
 // Orange and red are kept for what is urgent: a high or critical level, a failed check.
+// Translucent, so one value reads as a faint band on a light theme and a dark one.
+const STRIPE = '#80808018'
 const TONE = { blue: '#4a86c7', purple: '#8b6fc9', gray: '#8a8880', orange: '#d9822b', red: '#d0483e' }
 const PATHS = {
   change: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>',
@@ -219,23 +221,25 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
   const indexed = report.blocks.map((block, i) => ({ block, i }))
   const order = ORDERS[orderName]
 
-  return (
-    <Box borderStyle="round" flexDirection="column" paddingX={2} paddingY={1} gap={1}>
-      <Text bold>{report.headline}</Text>
-      {order === undefined
-        ? indexed.map(({ block, i }) => tile(block, i))
-        : order.map(name => {
-            const mine = indexed.filter(({ block }) => SECTIONS[name].has(block))
+  const shown = (order ?? []).filter(name => indexed.some(({ block }) => SECTIONS[name].has(block)))
 
-            return (
-              mine.length > 0 && (
-                <Box flexDirection="column" gap={1}>
-                  <Text dimColor>{SECTIONS[name].title.toUpperCase()}</Text>
-                  {mine.map(({ block, i }) => tile(block, i))}
-                </Box>
-              )
-            )
-          })}
+  return (
+    <Box borderStyle="round" flexDirection="column" gap={1}>
+      <Box paddingX={2} paddingTop={1}>
+        <Text bold>{report.headline}</Text>
+      </Box>
+      {order === undefined ? (
+        <Box flexDirection="column" gap={1} paddingX={2} paddingBottom={1}>
+          {indexed.map(({ block, i }) => tile(block, i))}
+        </Box>
+      ) : (
+        shown.map((name, at) => (
+          <Box flexDirection="column" gap={1} paddingX={2} paddingY={1} {...(at % 2 === 0 ? { backgroundColor: STRIPE } : {})}>
+            <Text dimColor>{SECTIONS[name].title.toUpperCase()}</Text>
+            {indexed.filter(({ block }) => SECTIONS[name].has(block)).map(({ block, i }) => tile(block, i))}
+          </Box>
+        ))
+      )}
     </Box>
   )
 }

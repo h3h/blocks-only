@@ -1,5 +1,5 @@
 import { atom, memberOf, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, ResolveInput } from 'claude-code'
 
 import type { Block, Notes, Option, Pending, Report } from '../types'
 import { MAX_STRIKES, mustReport, SCHEMA, validate } from './validate'
@@ -97,6 +97,97 @@ async function pick($: EngineInterface, report: string, block: number, index: nu
 
 function asked(block: Block) {
   return block.type === 'question' ? block.summary : undefined
+}
+
+type Call = { input: unknown; isRunning: boolean; isErrored: boolean; output?: unknown }
+
+/** One report call drawn as its card; null when its input is no valid report. */
+async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }, call: Call, id: string, orderName: string) {
+  const { Box, Button, Markdown, Svg, Text } = $.ui.resolve(e)
+  if (call.isRunning) return <Text dimColor>Writing report…</Text>
+  if (call.isErrored) return <Text color={TONE.bad}>{String(call.output ?? 'Report refused.')}</Text>
+
+  const report = call.input as Report
+  if (validate(report).length > 0) return null
+  const unfolded = await read($, memberOf(open, { requestId: id }))
+  const choice = await read($, memberOf(picked, { requestId: id }))
+
+  const tile = (block: Block, i: number) => {
+    const { icon, tone, word } = look(block)
+    const more = folded(block)
+    const isOpen = unfolded.includes(i)
+    const must = required(block)
+    const rec = block.recommended ?? -1
+
+    return (
+      <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={1}>
+        <Box gap={1} alignItems="center">
+          <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
+          {more === '' ? (
+            <Text bold>{block.summary}</Text>
+          ) : (
+            <Button
+              key={`fold-${i}`}
+              plain
+              label={`${isOpen ? '▾' : '▸'} ${block.summary}`}
+              onPress={() =>
+                update($, memberOf(open, { requestId: id }), (now: number[]) =>
+                  now.includes(i) ? now.filter(one => one !== i) : [...now, i],
+                )
+              }
+            />
+          )}
+          {word && <Text color={tone}>{word}</Text>}
+        </Box>
+        {must && <Text dimColor>{must}</Text>}
+        {isOpen && more !== '' && <Markdown text={more} />}
+        {(block.options ?? []).map((option, j) => {
+          const isPicked = choice === `${i}:${j}`
+          if (choice?.startsWith(`${i}:`)) {
+            return <Text dimColor={!isPicked}>{`${isPicked ? '● Picked: ' : '○ '}${option.label}`}</Text>
+          }
+
+          return (
+            <Box flexDirection="column">
+              <Button
+                key={`pick-${i}-${j}`}
+                label={`${j + 1}. ${option.label}${j === rec ? ' (recommended)' : ''}`}
+                {...(j === rec ? { variant: 'primary' as const } : {})}
+                onPress={() => pick($, id, i, j, option, asked(block))}
+              />
+              <Text dimColor>{option.effect}</Text>
+            </Box>
+          )
+        })}
+        {block.options && block.reason && (
+          <Text dimColor>{rec >= 0 ? `Why ${rec + 1}: ${block.reason}` : `No recommendation: ${block.reason}`}</Text>
+        )}
+      </Box>
+    )
+  }
+
+  const indexed = report.blocks.map((block, i) => ({ block, i }))
+  const order = ORDERS[orderName]
+
+  return (
+    <Box borderStyle="round" flexDirection="column" paddingX={1} gap={1}>
+      <Text bold>{report.headline}</Text>
+      {order === undefined
+        ? indexed.map(({ block, i }) => tile(block, i))
+        : order.map(name => {
+            const mine = indexed.filter(({ block }) => SECTIONS[name].has(block))
+
+            return (
+              mine.length > 0 && (
+                <Box flexDirection="column">
+                  <Text dimColor>{SECTIONS[name].title.toUpperCase()}</Text>
+                  {mine.map(({ block, i }) => tile(block, i))}
+                </Box>
+              )
+            )
+          })}
+    </Box>
+  )
 }
 
 export const register: Register = (on, options) => {
@@ -254,90 +345,22 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
     if (e.surface !== 'desktop' || e.props.tool !== REPORT) return next(e)
-    const { Box, Button, Markdown, Svg, Text } = $.ui.resolve(e)
-    if (e.props.isRunning) return <Text dimColor>Writing report…</Text>
-    if (e.props.isErrored) return <Text color={TONE.bad}>{String(e.props.output ?? 'Report refused.')}</Text>
 
-    const report = e.props.input as Report
-    if (validate(report).length > 0) return next(e)
-    const id = e.requestId
-    const unfolded = await read($, memberOf(open, e))
-    const choice = await read($, memberOf(picked, e))
+    return (await card($, e, e.props, e.requestId, String(options.order ?? 'decisions-first'))) ?? next(e)
+  })
 
-    const tile = (block: Block, i: number) => {
-      const { icon, tone, word } = look(block)
-      const more = folded(block)
-      const isOpen = unfolded.includes(i)
-      const must = required(block)
-      const rec = block.recommended ?? -1
-
-      return (
-        <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={1}>
-          <Box gap={1} alignItems="center">
-            <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
-            {more === '' ? (
-              <Text bold>{block.summary}</Text>
-            ) : (
-              <Button
-                key={`fold-${i}`}
-                plain
-                label={`${isOpen ? '▾' : '▸'} ${block.summary}`}
-                onPress={() =>
-                  update($, memberOf(open, { requestId: id }), (now: number[]) =>
-                    now.includes(i) ? now.filter(one => one !== i) : [...now, i],
-                  )
-                }
-              />
-            )}
-            {word && <Text color={tone}>{word}</Text>}
-          </Box>
-          {must && <Text dimColor>{must}</Text>}
-          {isOpen && more !== '' && <Markdown text={more} />}
-          {(block.options ?? []).map((option, j) => {
-            const isPicked = choice === `${i}:${j}`
-            if (choice?.startsWith(`${i}:`)) {
-              return <Text dimColor={!isPicked}>{`${isPicked ? '● Picked: ' : '○ '}${option.label}`}</Text>
-            }
-
-            return (
-              <Box flexDirection="column">
-                <Button
-                  key={`pick-${i}-${j}`}
-                  label={`${j + 1}. ${option.label}${j === rec ? ' (recommended)' : ''}`}
-                  {...(j === rec ? { variant: 'primary' as const } : {})}
-                  onPress={() => pick($, id, i, j, option, asked(block))}
-                />
-                <Text dimColor>{option.effect}</Text>
-              </Box>
-            )
-          })}
-          {block.options && block.reason && (
-            <Text dimColor>{rec >= 0 ? `Why ${rec + 1}: ${block.reason}` : `No recommendation: ${block.reason}`}</Text>
-          )}
-        </Box>
-      )
-    }
-
-    const indexed = report.blocks.map((block, i) => ({ block, i }))
-    const order = ORDERS[String(options.order ?? 'decisions-first')]
+  // Desktop folds a report call into the run of reads before it; the card is drawn under that run's line.
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => {
+    const reports = e.props.calls.filter(call => call.tool === REPORT && call.tool_use_id !== undefined)
+    if (e.surface !== 'desktop' || e.props.isExpanded || reports.length === 0) return next(e)
+    const { Box } = $.ui.resolve(e)
+    const cards = []
+    for (const call of reports) cards.push(await card($, e, call, call.tool_use_id!, String(options.order ?? 'decisions-first')))
 
     return (
-      <Box borderStyle="round" flexDirection="column" paddingX={1} gap={1}>
-        <Text bold>{report.headline}</Text>
-        {order === undefined
-          ? indexed.map(({ block, i }) => tile(block, i))
-          : order.map(name => {
-              const mine = indexed.filter(({ block }) => SECTIONS[name].has(block))
-
-              return (
-                mine.length > 0 && (
-                  <Box flexDirection="column">
-                    <Text dimColor>{SECTIONS[name].title.toUpperCase()}</Text>
-                    {mine.map(({ block, i }) => tile(block, i))}
-                  </Box>
-                )
-              )
-            })}
+      <Box flexDirection="column">
+        {await next(e)}
+        {cards}
       </Box>
     )
   })

@@ -70,3 +70,25 @@ test('the report row hides its result, and an accepted report puts its decision 
   expect(await band.find({ key: 'band-0' })).toBeDefined()
   await band.unmount()
 })
+
+test('a report folded into a run of tool calls still draws its card', async ($, on) => {
+  // Stands for the engine's own count line.
+  on('ui.render', { component: 'ToolGroup' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>Read 2 files, used a tool</Text>
+  })
+  const { tool_use_id, ...call } = props
+  const ui = await $.ui.mount({
+    plugin: 'blocks-only',
+    surface: 'desktop',
+    component: 'ToolGroup',
+    requestId: 'g1',
+    props: { calls: [{ ...call, tool_use_id }], isActive: false, isExpanded: false },
+  })
+  expect(await ui.find({ type: 'Text', text: /used a tool/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Retries now work/ })).toBeDefined()
+  await ui.press({ key: 'pick-2-1' })
+  expect(await ui.find({ type: 'Text', text: /Picked: Leave as is/ })).toBeDefined()
+  await ui.unmount()
+})

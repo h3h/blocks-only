@@ -1,7 +1,7 @@
 import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register, ResolveInput } from 'claude-code'
 
-import type { Block, Notes, Option, Pending, Report } from '../types'
+import type { Block, Notes, Option, Report } from '../types'
 import { MAX_STRIKES, mustReport, SCHEMA, validate } from './validate'
 
 const REPORT = 'mcp__blocks-only__report'
@@ -15,12 +15,12 @@ When a turn has used any tool, end it by calling the ${REPORT} tool, and write n
 Put each thing the user needs in the block type made for it: change (edits and other output), finding (something learned), check (how the work was checked, including what was not checked and why), warning (a risk or blocker), question (only the user can settle it), next (a proposed continuation, with the instruction each option sends), unclassified (last resort). Each summary is one line; anything longer goes in that block's detail, which the user unfolds if they want it. A turn that used no tool is a conversation: answer it in plain prose.`,
 } as const
 
-const pending = atom({ plugin: 'blocks-only', key: 'pending' } as const, null)
 const notes = atom({ plugin: 'blocks-only', key: 'notes' } as const, { head: {}, count: {}, open: {} })
 const open = atom({ plugin: 'blocks-only', key: 'open' } as const, [])
 const picked = atom({ plugin: 'blocks-only', key: 'picked' } as const, null)
 
-const TONE = { info: '#3b82c4', ok: '#3f9a5a', warn: '#c98a1b', bad: '#d0483e', accent: '#d97757', dim: '#8a8880' }
+// Orange and red are kept for what is urgent: a high or critical level, a failed check.
+const TONE = { blue: '#4a86c7', purple: '#8b6fc9', gray: '#8a8880', orange: '#d9822b', red: '#d0483e' }
 const PATHS = {
   change: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>',
   finding: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
@@ -33,29 +33,30 @@ const PATHS = {
   unclassified: '<path d="M6 12h.5M12 12h.5M18 12h.5"/>',
 }
 
-const isBad = (level?: string) => level === 'high' || level === 'critical'
+const urgent = (level: string | undefined, calm: string) =>
+  level === 'critical' ? TONE.red : level === 'high' ? TONE.orange : calm
 
 /** A block's icon, its colour, and the word beside its summary. */
 function look(block: Block): { icon: keyof typeof PATHS; tone: string; word?: string } {
   switch (block.type) {
     case 'change':
-      return { icon: 'change', tone: TONE.info }
+      return { icon: 'change', tone: TONE.blue }
     case 'finding':
-      return { icon: 'finding', tone: TONE.accent, word: block.level }
+      return { icon: 'finding', tone: urgent(block.level, TONE.purple), word: block.level }
     case 'check': {
       const status = block.status ?? 'not_run'
       const icon = status === 'passed' || status === 'failed' ? status : 'not_run'
-      const tone = status === 'passed' ? TONE.ok : status === 'failed' ? TONE.bad : TONE.warn
+      const tone = status === 'failed' ? TONE.red : TONE.gray
       return { icon, tone, word: status.replace('_', ' ') }
     }
     case 'warning':
-      return { icon: 'warning', tone: isBad(block.severity) ? TONE.bad : TONE.warn, word: block.severity }
+      return { icon: 'warning', tone: urgent(block.severity, TONE.gray), word: block.severity }
     case 'question':
-      return { icon: 'question', tone: TONE.accent }
+      return { icon: 'question', tone: TONE.purple }
     case 'next':
-      return { icon: 'next', tone: TONE.accent }
+      return { icon: 'next', tone: TONE.purple }
     default:
-      return { icon: 'unclassified', tone: TONE.dim }
+      return { icon: 'unclassified', tone: TONE.gray }
   }
 }
 
@@ -89,7 +90,6 @@ const ORDERS: Record<string, (keyof typeof SECTIONS)[]> = {
 /** Marks the option picked and sends what it stands for as the person's own prompt. */
 async function pick($: EngineInterface, report: string, block: number, index: number, option: Option, ask?: string) {
   await update($, memberOf(picked, { requestId: report }), () => `${block}:${index}`)
-  await update($, pending, now => (now?.report === report ? null : now))
   const text = ask === undefined ? option.instruction : `${ask} ${option.label}`
   // Not awaited: it resolves when the next turn starts.
   if (text) void $.prompt.submit({ text, asUser: true }).catch(() => {})
@@ -105,7 +105,7 @@ type Call = { input: unknown; isRunning: boolean; isErrored: boolean; output?: u
 async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }, call: Call, id: string, orderName: string) {
   const { Box, Button, Markdown, Svg, Text } = $.ui.resolve(e)
   if (call.isRunning) return <Text dimColor>Writing report…</Text>
-  if (call.isErrored) return <Text color={TONE.bad}>{String(call.output ?? 'Report refused.')}</Text>
+  if (call.isErrored) return <Text color={TONE.red}>{String(call.output ?? 'Report refused.')}</Text>
 
   const report = call.input as Report
   if (validate(report).length > 0) return null
@@ -120,7 +120,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
     const rec = block.recommended ?? -1
 
     return (
-      <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={1}>
+      <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={2} paddingY={1} gap={1}>
         <Box gap={1} alignItems="center">
           <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
           {more === '' ? (
@@ -170,7 +170,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
   const order = ORDERS[orderName]
 
   return (
-    <Box borderStyle="round" flexDirection="column" paddingX={1} gap={1}>
+    <Box borderStyle="round" flexDirection="column" paddingX={2} paddingY={1} gap={1}>
       <Text bold>{report.headline}</Text>
       {order === undefined
         ? indexed.map(({ block, i }) => tile(block, i))
@@ -179,7 +179,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
 
             return (
               mine.length > 0 && (
-                <Box flexDirection="column">
+                <Box flexDirection="column" gap={1}>
                   <Text dimColor>{SECTIONS[name].title.toUpperCase()}</Text>
                   {mine.map(({ block, i }) => tile(block, i))}
                 </Box>
@@ -222,7 +222,6 @@ export const register: Register = (on, options) => {
     if (arg === 'on' || arg === 'off') {
       isOn = arg === 'on'
       await $.store.set('isOn', isOn)
-      if (!isOn) await update($, pending, () => null)
     } else if (arg !== '') return { text: `Usage: /${COMMAND} [on|off]` }
 
     return { text: `Typed block reports are ${isOn ? 'on' : 'off'}.` }
@@ -240,12 +239,6 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('prompt.submit', async ($, e, next) => {
-    await update($, pending, () => null)
-
-    return next(e)
-  })
-
   on('tool.call', async ($, e, next) => {
     if (String(e.tool) !== REPORT) {
       if (e.agentId === undefined) turn = { ...turn, hasUsedTools: true, hasReported: false }
@@ -258,21 +251,7 @@ export const register: Register = (on, options) => {
     const errors = validate(report)
     if (errors.length > 0) return { deny: `Report refused. Fix these and call it again:\n- ${errors.join('\n- ')}` }
 
-    if (e.agentId === undefined) {
-      turn.hasReported = true
-      const block = report.blocks.findIndex(isDecision)
-      const found = report.blocks[block]
-      const decision: Pending | null = found
-        ? {
-            report: e.tool_use_id,
-            block,
-            summary: found.summary,
-            options: found.options ?? [],
-            recommended: found.recommended ?? null,
-          }
-        : null
-      await update($, pending, () => decision)
-    }
+    if (e.agentId === undefined) turn.hasReported = true
 
     return { result: 'Report accepted and shown to the user. End your turn now and write nothing more.' }
   }).catch(($, e, next) => next(e))
@@ -361,31 +340,6 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {await next(e)}
         {cards}
-      </Box>
-    )
-  })
-
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const decision = await read($, pending)
-    if (e.surface !== 'desktop' || decision === null || e.props.hasSurvey) return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const ask = decision.options.some(option => option.instruction) ? undefined : decision.summary
-
-    return (
-      <Box flexDirection="column">
-        {await next(e)}
-        <Text dimColor>{decision.summary}</Text>
-        <Box gap={1} flexWrap="wrap">
-          {decision.options.map((option, j) => (
-            <Button
-              key={`band-${j}`}
-              hotkey={String(j + 1)}
-              label={option.label}
-              {...(j === decision.recommended ? { variant: 'primary' as const } : {})}
-              onPress={() => pick($, decision.report, decision.block, j, option, ask)}
-            />
-          ))}
-        </Box>
       </Box>
     )
   })

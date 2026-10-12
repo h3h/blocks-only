@@ -18,16 +18,12 @@ export type Block = {
 
 export type Report = { headline: string; blocks: Block[] }
 
-/** The newest report's unanswered decision, mirrored above the prompt. */
-export type Pending = { report: string; block: number; summary: string; options: Option[]; recommended: number | null }
-
 /** Prose rows of turns that ended in a report: each row's head row, and each head's count and fold. */
 export type Notes = { head: Record<string, string>; count: Record<string, number>; open: Record<string, boolean> }
 
 declare module 'claude-code' {
   interface PluginState {
     'blocks-only': {
-      pending: Pending | null
       notes: Notes
       /** Per report (its tool_use_id): indexes of the blocks unfolded. */
       open: StateFamily<number[]>

@@ -39,13 +39,7 @@ test('a report draws as a card on desktop, folds, and takes a pick', async $ => 
   await ui.unmount()
 })
 
-test('the report row hides its result, and an accepted report puts its decision above the prompt', async ($, on) => {
-  // Stands for the engine's own empty band beneath the mod.
-  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
-    const { Box } = $.ui.resolve(e)
-
-    return <Box />
-  })
+test('the report row hides its result, and a report is refused or accepted', async $ => {
   const result = await $.ui.mount({
     plugin: 'blocks-only',
     surface: 'desktop',
@@ -58,17 +52,8 @@ test('the report row hides its result, and an accepted report puts its decision 
 
   const refused = await $.tool.call({ tool: props.tool, tool_use_id: 'r2', headline: 'Done.', blocks: [{ type: 'finding', summary: 'x' }] })
   expect(refused.deny).toContain('blocks[0] needs why')
-
   const accepted = await $.tool.call({ tool: props.tool, tool_use_id: 'r3', ...props.input })
   expect(accepted.deny).toBeUndefined()
-  const band = await $.ui.mount({
-    plugin: 'blocks-only',
-    surface: 'desktop',
-    component: 'AbovePrompt',
-    props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} },
-  })
-  expect(await band.find({ key: 'band-0' })).toBeDefined()
-  await band.unmount()
 })
 
 test('a report folded into a run of tool calls still draws its card', async ($, on) => {

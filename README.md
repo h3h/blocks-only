@@ -19,7 +19,8 @@ Answer `y` to add the marketplace, then pick a scope. Type that line in a termin
 - Stops a turn that used tools from ending without a report. After two reminders it lets the turn end and says so in the transcript.
 - Draws the accepted report as a card: a headline, then *Needs you*, *What happened* and *Verification*. Each block is a tile with an icon; a tile with more to say unfolds when pressed.
 - Folds the turn's prose into one "Working notes" row.
-- Shows the report's first open decision above the prompt. Type its number into an empty prompt, or press a button, to send that option.
+- A question or next step shows its options as buttons in the card; pressing one sends it as your next prompt.
+- Colour marks urgency: orange and red only for a high or critical level or a failed check; everything else is blue, purple or gray.
 
 A turn that used no tool is a conversation and is answered in plain prose.
 

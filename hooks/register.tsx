@@ -2,10 +2,9 @@ import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register, ResolveInput } from 'claude-code'
 
 import type { Block, Notes, Option, Report } from '../types'
-import { sendsLine } from './option'
 import type { OptionProps } from './option'
 import type { RowProps } from './row'
-import { MAX_STRIKES, mustReport, SCHEMA, validate } from './validate'
+import { MAX_STRIKES, mustReport, SCHEMA, sendsNote, validate } from './validate'
 
 const REPORT = 'mcp__blocks-only__report'
 const COMMAND = 'blocks-output'
@@ -185,6 +184,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
                     isLive: !isSettled,
                     isDim: isSettled && !isPicked,
                     text: sends(block, option),
+                    note: block.type === 'next' ? sendsNote(option) : '',
                     tone: TONE.purple,
                   }
 
@@ -218,7 +218,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
                         {isMarked && <Text color={TONE.purple}>{isSettled ? 'picked' : 'recommended'}</Text>}
                       </Box>
                       <Text dimColor>{option.effect}</Text>
-                      <Text dimColor italic>{sendsLine(sends(block, option))}</Text>
+                      {block.type === 'next' && sendsNote(option) !== '' && <Text dimColor italic>{sendsNote(option)}</Text>}
                     </Box>
                   </Box>
                 )
@@ -263,6 +263,9 @@ export const register: Register = (on, options) => {
   let isOn = true
   // The main loop's current turn; a hot reload starts it over, which only costs that turn its gate.
   let turn = { hasUsedTools: false, hasReported: false, strikes: 0, rows: [] as string[] }
+  // For `/blocks-output debug`: the prose rows the last finished turn stored, and the rows the transcript last drew.
+  let stored: string[] = []
+  let drawn: string[] = []
 
   on('session.start', async ($, e, next) => {
     isOn = (await $.store.get('isOn')) !== false
@@ -291,6 +294,8 @@ export const register: Register = (on, options) => {
     if (arg === 'on' || arg === 'off') {
       isOn = arg === 'on'
       await $.store.set('isOn', isOn)
+    } else if (arg === 'debug') {
+      return { text: `Stored prose rows: ${stored.join(', ') || 'none'}\nDrawn message rows: ${drawn.join(', ') || 'none'}` }
     } else if (arg !== '') return { text: `Usage: /${COMMAND} [on|off]` }
 
     return { text: `Typed block reports are ${isOn ? 'on' : 'off'}.` }
@@ -342,6 +347,7 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
+    stored = turn.rows
     const head = turn.rows[0]
     if (turn.hasReported && head !== undefined) {
       const rows = turn.rows
@@ -360,6 +366,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (e.surface !== 'desktop') return next(e)
+    if (!drawn.includes(e.requestId)) drawn = [...drawn, e.requestId].slice(-8)
     const all = await read($, notes)
     const head = all.head[e.requestId]
     if (head === undefined) return next(e)

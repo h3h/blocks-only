@@ -96,6 +96,23 @@ export function validate(report: Partial<Report>): string[] {
   return [...errors, ...report.blocks.flatMap((block, i) => blockErrors(block ?? ({} as Block), `blocks[${i}]`))]
 }
 
+const words = (text: string) =>
+  new Set((text.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).map(word => word.slice(0, 5)))
+
+/**
+ * The line an option shows about what a press sends; '' when its label and effect already say it.
+ *
+ * shortcut: "says it" is word overlap (half the label's and effect's words appear in the instruction), not meaning; ask a model if it misjudges.
+ */
+export function sendsNote(option: { label: string; effect: string; instruction?: string }): string {
+  if (!option.instruction) return 'Sends nothing.'
+  const said = words(`${option.label} ${option.effect}`)
+  const sent = words(option.instruction)
+  const shared = [...said].filter(word => sent.has(word)).length
+
+  return shared * 2 >= said.size ? '' : `Sends: "${option.instruction}"`
+}
+
 export const MAX_STRIKES = 2
 
 /** Whether the turn may not stop yet: it used tools, has no accepted report, and has reminders left. */

@@ -87,9 +87,11 @@ test('a report folded into a run of tool calls still draws its card', async ($, 
   await ui.unmount()
 })
 
-test('an option shows what it will send before it is pressed', async $ => {
-  const ui = await $.ui.mount({ plugin: 'blocks-only', surface: 'desktop', component: 'ToolUse', requestId: 'r9', props: { ...props, tool_use_id: 'r9' } })
-  expect(await ui.find({ type: 'Text', text: 'Sends: "Give mobile its own config."', in: 'pick:r9:2:0' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'Sends nothing.', in: 'pick:r9:2:1' })).toBeDefined()
+test('an option whose instruction strays from its label shows what it will send', async $ => {
+  const stray = { label: 'I push it myself', effect: 'You run the command, then restart', instruction: 'Read the README and summarise it.' }
+  const input = { ...props.input, blocks: [{ type: 'next', summary: 'Next?', options: [stray, { label: 'Stop', effect: 'Ends here' }], recommended: 0, reason: 'Because.' }] }
+  const ui = await $.ui.mount({ plugin: 'blocks-only', surface: 'desktop', component: 'ToolUse', requestId: 'r9', props: { ...props, tool_use_id: 'r9', input } })
+  expect(await ui.find({ type: 'Text', text: 'Sends: "Read the README and summarise it."', in: 'pick:r9:0:0' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Sends nothing.', in: 'pick:r9:0:1' })).toBeDefined()
   await ui.unmount()
 })

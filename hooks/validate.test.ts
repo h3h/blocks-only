@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Block } from '../types'
-import { MAX_STRIKES, mustReport, validate } from './validate'
+import { MAX_STRIKES, mustReport, sendsNote, validate } from './validate'
 
 const report = (...blocks: Block[]) => validate({ headline: 'Done.', blocks })
 const options = [
@@ -53,4 +53,23 @@ test('a turn must report only when on, after tools, with reminders left', () => 
   expect(mustReport({ ...turn, hasUsedTools: false })).toBe(false)
   expect(mustReport({ ...turn, hasReported: true })).toBe(false)
   expect(mustReport({ ...turn, strikes: MAX_STRIKES })).toBe(false)
+})
+
+test('an option says what it sends only when its label and effect do not', () => {
+  // The press that once sent a prompt its label never mentioned.
+  const mismatch = {
+    label: 'I sign all four, push, update, restart',
+    effect: 'One chained command re-signs the four commits, pushes and updates; then restart and rerun test 2',
+    instruction: 'Read README.md and hooks/validate.ts, tell me if the block table in the README matches the validator.',
+  }
+  expect(sendsNote(mismatch)).toBe(`Sends: "${mismatch.instruction}"`)
+  expect(
+    sendsNote({
+      label: 'Fix README and validate level',
+      effect: 'Adds the three rules to the README; validate.ts refuses a bad finding level, with a test; committed, not pushed',
+      instruction:
+        'Update the Blocks section of README.md to say every option needs label and effect. Make validate.ts refuse a finding whose level is not valid, and add a test case. Run the tests. Commit without pushing.',
+    }),
+  ).toBe('')
+  expect(sendsNote({ label: 'Leave as is', effect: 'Ends here' })).toBe('Sends nothing.')
 })

@@ -2,6 +2,7 @@ import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register, ResolveInput } from 'claude-code'
 
 import type { Block, Notes, Option, Report } from '../types'
+import { sendsLine } from './option'
 import type { OptionProps } from './option'
 import type { RowProps } from './row'
 import { MAX_STRIKES, mustReport, SCHEMA, validate } from './validate'
@@ -14,7 +15,7 @@ const SECTION = {
   scope: 'session',
   text: `# Reporting your work
 When a turn has used any tool, end it by calling the ${REPORT} tool, and write nothing after it: no summary, no recap, no closing line. The user reads only that report. Do not narrate what you tried.
-Put each thing the user needs in the block type made for it: change (edits and other output), finding (something learned), check (how the work was checked, including what was not checked and why), warning (a risk or blocker), question (only the user can settle it), next (a proposed continuation, with the instruction each option sends), unclassified (last resort). Each summary is one line; anything longer goes in that block's detail, which the user unfolds if they want it. A turn that used no tool is a conversation: answer it in plain prose.`,
+Put each thing the user needs in the block type made for it: change (edits and other output), finding (something learned), check (how the work was checked, including what was not checked and why), warning (a risk or blocker), question (only the user can settle it), next (a proposed continuation). Pressing an option sends its instruction to you as the user's next prompt, word for word, so an instruction must ask for exactly what its label says and nothing else. An option the user carries out themselves, or one that ends here, has no instruction: never put a follow-up request there, unclassified (last resort). Each summary is one line; anything longer goes in that block's detail, which the user unfolds if they want it. A turn that used no tool is a conversation: answer it in plain prose.`,
 } as const
 
 const notes = atom({ plugin: 'blocks-only', key: 'notes' } as const, { head: {}, count: {}, open: {} })
@@ -217,6 +218,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
                         {isMarked && <Text color={TONE.purple}>{isSettled ? 'picked' : 'recommended'}</Text>}
                       </Box>
                       <Text dimColor>{option.effect}</Text>
+                      <Text dimColor italic>{sendsLine(sends(block, option))}</Text>
                     </Box>
                   </Box>
                 )

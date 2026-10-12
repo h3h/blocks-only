@@ -9,7 +9,7 @@ const OPTION = {
   properties: {
     label: { type: 'string', description: 'A few words.' },
     effect: { type: 'string', description: 'What picking it does.' },
-    instruction: { type: 'string', description: 'next only: the prompt sent when picked. Leave out for an option that ends here.' },
+    instruction: { type: 'string', description: 'next only: sent verbatim as the user\'s next prompt when picked, so it must ask for exactly what the label says. Leave out for an option the user does themselves or that ends here.' },
   },
   required: ['label', 'effect'],
 }

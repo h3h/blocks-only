@@ -13,6 +13,9 @@ export type OptionProps = {
   tone: string
 }
 
+/** The line that says, before the press, exactly what the press will send. */
+export const sendsLine = (text: string | null) => (text === null ? 'Sends nothing.' : `Sends: "${text}"`)
+
 /** One option of a question or next block: the whole bordered block is the press. */
 const OptionBlock: ClientModule<OptionProps, { isOver: boolean }> = (props, surface) => {
   const { Box, Text } = surface.elements
@@ -34,6 +37,7 @@ const OptionBlock: ClientModule<OptionProps, { isOver: boolean }> = (props, surf
           {props.mark !== '' && <Text color={props.tone}>{props.mark}</Text>}
         </Box>
         <Text dimColor>{props.effect}</Text>
+        <Text dimColor italic>{sendsLine(props.text)}</Text>
       </Box>
     </Box>
   )

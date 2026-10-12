@@ -1,0 +1,23 @@
+{
+  "name": "blocks-only",
+  "version": "0.1.0",
+  "description": "Coding turns end in a validated report of typed blocks, drawn as one card in the Desktop app; prose stays folded.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "order": {
+      "type": "string",
+      "title": "Section order",
+      "description": "Which section of a report card comes first.",
+      "options": [
+        "decisions-first",
+        "verification-first",
+        "as-written"
+      ],
+      "default": "decisions-first"
+    }
+  },
+  "author": {
+    "name": "Bradford Fults"
+  },
+  "repository": "https://github.com/h3h/blocks-only"
+}

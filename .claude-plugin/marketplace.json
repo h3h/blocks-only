@@ -1,0 +1,5 @@
+{
+  "name": "blocks-only",
+  "owner": { "name": "Bradford Fults" },
+  "plugins": [{ "name": "blocks-only", "source": "./" }]
+}

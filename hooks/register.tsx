@@ -130,25 +130,28 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
       <Box gap={2} alignItems="flex-start">
         <Svg source={badge(icon, tone)} alt={block.type} width={20} height={20} />
         <Box flexDirection="column" flexGrow={1}>
-          <Box justifyContent="space-between" gap={2}>
-            <Box gap={1} flexWrap="wrap">
-              {more === '' ? (
-                <Text>{block.summary}</Text>
-              ) : (
-                <Button
-                  key={`fold-${i}`}
-                  plain
-                  label={block.summary}
-                  onPress={() =>
-                    update($, memberOf(open, { requestId: id }), (now: number[]) =>
-                      now.includes(i) ? now.filter(one => one !== i) : [...now, i],
-                    )
-                  }
-                />
-              )}
-              {word && <Text color={tone}>{word}</Text>}
+          <Box gap={1}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text>{block.summary}</Text>
             </Box>
-            {more !== '' && <Text dimColor>{isOpen ? '▾' : '▸'}</Text>}
+            {word && (
+              <Box flexShrink={0}>
+                <Text color={tone}>{word}</Text>
+              </Box>
+            )}
+            {more !== '' && (
+              <Button
+                key={`fold-${i}`}
+                plain
+                dimColor
+                label={isOpen ? '▾' : '▸'}
+                onPress={() =>
+                  update($, memberOf(open, { requestId: id }), (now: number[]) =>
+                    now.includes(i) ? now.filter(one => one !== i) : [...now, i],
+                  )
+                }
+              />
+            )}
           </Box>
           {must && <Text dimColor>{must}</Text>}
           {isOpen && more !== '' && (
@@ -208,7 +211,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
                   </Box>
                 )
               })}
-              {block.reason && (
+              {block.reason && !isSettled && (
                 <Text dimColor>{rec >= 0 ? `Why ${rec + 1}: ${block.reason}` : `No recommendation: ${block.reason}`}</Text>
               )}
             </Box>

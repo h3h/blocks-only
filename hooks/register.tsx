@@ -2,6 +2,7 @@ import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register, ResolveInput } from 'claude-code'
 
 import type { Block, Notes, Option, Report } from '../types'
+import type { OptionProps } from './option'
 import { MAX_STRIKES, mustReport, SCHEMA, validate } from './validate'
 
 const REPORT = 'mcp__blocks-only__report'
@@ -18,6 +19,7 @@ Put each thing the user needs in the block type made for it: change (edits and o
 const notes = atom({ plugin: 'blocks-only', key: 'notes' } as const, { head: {}, count: {}, open: {} })
 const open = atom({ plugin: 'blocks-only', key: 'open' } as const, [])
 const picked = atom({ plugin: 'blocks-only', key: 'picked' } as const, null)
+const plain = atom({ plugin: 'blocks-only', key: 'isPlain' } as const, false)
 
 // Orange and red are kept for what is urgent: a high or critical level, a failed check.
 const TONE = { blue: '#4a86c7', purple: '#8b6fc9', gray: '#8a8880', orange: '#d9822b', red: '#d0483e' }
@@ -72,7 +74,7 @@ function required(block: Block): string | undefined {
 }
 
 const folded = (block: Block) =>
-  [block.type === 'finding' && block.why ? `**Why it matters:** ${block.why}` : '', block.detail ?? '']
+  [block.type === 'finding' ? (block.why ?? '') : '', block.detail ?? '']
     .filter(Boolean)
     .join('\n\n')
 
@@ -88,22 +90,22 @@ const ORDERS: Record<string, (keyof typeof SECTIONS)[]> = {
 }
 
 /** Marks the option picked and sends what it stands for as the person's own prompt. */
-async function pick($: EngineInterface, report: string, block: number, index: number, option: Option, ask?: string) {
+async function pick($: EngineInterface, report: string, block: number, index: number, text: string | null) {
   await update($, memberOf(picked, { requestId: report }), () => `${block}:${index}`)
-  const text = ask === undefined ? option.instruction : `${ask} ${option.label}`
   // Not awaited: it resolves when the next turn starts.
   if (text) void $.prompt.submit({ text, asUser: true }).catch(() => {})
 }
 
-function asked(block: Block) {
-  return block.type === 'question' ? block.summary : undefined
+/** What picking an option sends: a question's answer, or a next step's instruction; null when it ends here. */
+function sends(block: Block, option: Option) {
+  return block.type === 'question' ? `${block.summary} ${option.label}` : (option.instruction ?? null)
 }
 
 type Call = { input: unknown; isRunning: boolean; isErrored: boolean; output?: unknown }
 
 /** One report call drawn as its card; null when its input is no valid report. */
 async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }, call: Call, id: string, orderName: string) {
-  const { Box, Button, Markdown, Svg, Text } = $.ui.resolve(e)
+  const { Box, Button, Client, Markdown, Svg, Text } = $.ui.resolve(e)
   if (call.isRunning) return <Text dimColor>Writing report…</Text>
   if (call.isErrored) return <Text color={TONE.red}>{String(call.output ?? 'Report refused.')}</Text>
 
@@ -111,6 +113,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
   if (validate(report).length > 0) return null
   const unfolded = await read($, memberOf(open, { requestId: id }))
   const choice = await read($, memberOf(picked, { requestId: id }))
+  const isPlain = await read($, plain)
 
   // One block as a row: icon, summary, the fold mark at the far edge; what it must show sits under the summary.
   const tile = (block: Block, i: number) => {
@@ -157,6 +160,22 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
                 const isPicked = choice === `${i}:${j}`
                 const isMarked = isSettled ? isPicked : j === rec
 
+                if (!isPlain) {
+                  const props: OptionProps = {
+                    n: j + 1,
+                    label: option.label,
+                    effect: option.effect,
+                    mark: isMarked ? (isSettled ? 'picked' : 'recommended') : '',
+                    isLive: !isSettled,
+                    isDim: isSettled && !isPicked,
+                    text: sends(block, option),
+                    tone: TONE.purple,
+                  }
+
+                  return <Client key={`pick:${id}:${i}:${j}`} module="./option.tsx" props={props} />
+                }
+
+                // Drawn when the surface could not run the option module: only the label is the press.
                 return (
                   <Box
                     key={`option-${i}-${j}`}
@@ -177,7 +196,7 @@ async function card($: EngineInterface, e: ResolveInput & { surface: 'desktop' }
                             key={`pick-${i}-${j}`}
                             plain
                             label={option.label}
-                            onPress={() => pick($, id, i, j, option, asked(block))}
+                            onPress={() => pick($, id, i, j, sends(block, option))}
                           />
                         )}
                         {isMarked && <Text color={TONE.purple}>{isSettled ? 'picked' : 'recommended'}</Text>}
@@ -351,6 +370,23 @@ export const register: Register = (on, options) => {
 
     // The ToolUse row is the whole report.
     return <Box />
+  })
+
+  // An option block was pressed: its key names the report, block and option; its data carries what to send.
+  on('ui.message', async ($, e, next) => {
+    const [kind, report, block, index] = e.element.split(':')
+    if (kind !== 'pick' || report === undefined) return next(e)
+    const text = (e.data as { text?: unknown } | null)?.text
+    const { value } = await $.state.get({ plugin: 'blocks-only', key: 'picked', id: report } as const)
+    if (value == null) await pick($, report, Number(block), Number(index), typeof text === 'string' ? text : null)
+
+    return next(e)
+  })
+
+  on('ui.fault', async ($, e, next) => {
+    await update($, plain, () => true)
+
+    return next(e)
   })
 
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {

@@ -25,7 +25,14 @@ const props = {
   },
 }
 
-test('a report draws as a card on desktop, folds, and takes a pick', async $ => {
+test('a report draws as a card on desktop, folds, and takes a pick', async ($, on) => {
+  // Stands for the engine taking the prompt a pick sends.
+  let sent = ''
+  on('prompt.submit', ($, e) => {
+    sent = e.text
+
+    return { text: e.text }
+  })
   const ui = await $.ui.mount({ plugin: 'blocks-only', surface: 'desktop', component: 'ToolUse', requestId: 'r1', props })
   expect(await ui.find({ type: 'Text', text: /Retries now work/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Not checked: Staging login/ })).toBeDefined()
@@ -34,8 +41,11 @@ test('a report draws as a card on desktop, folds, and takes a pick', async $ => 
   await ui.press({ key: 'fold-0' })
   expect(await ui.find({ type: 'Markdown' })).toBeDefined()
 
-  await ui.press({ key: 'pick-2-1' })
-  expect(await ui.find({ type: 'Text', text: /^picked$/ })).toBeDefined()
+  await ui.post({ text: 'Give mobile its own config.' }, { in: 'pick:r1:2:0' })
+  expect(sent).toBe('Give mobile its own config.')
+  // A second press on a settled report sends nothing.
+  await ui.post({ text: 'Again.' }, { in: 'pick:r1:2:1' })
+  expect(sent).toBe('Give mobile its own config.')
   await ui.unmount()
 })
 
@@ -73,7 +83,6 @@ test('a report folded into a run of tool calls still draws its card', async ($, 
   })
   expect(await ui.find({ type: 'Text', text: /used a tool/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Retries now work/ })).toBeDefined()
-  await ui.press({ key: 'pick-2-1' })
-  expect(await ui.find({ type: 'Text', text: /^picked$/ })).toBeDefined()
+  expect(await ui.find({ key: 'pick:r1:2:0' })).toBeDefined()
   await ui.unmount()
 })

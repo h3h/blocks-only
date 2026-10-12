@@ -25,6 +25,8 @@ declare module 'claude-code' {
   interface PluginState {
     'blocks-only': {
       notes: Notes
+      /** True once the surface failed to run the option module: options fall back to plain buttons. */
+      isPlain: boolean
       /** Per report (its tool_use_id): indexes of the blocks unfolded. */
       open: StateFamily<number[]>
       /** Per report: "block:option" of the option picked. */

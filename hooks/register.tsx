@@ -297,6 +297,12 @@ export const register: Register = (on, options) => {
     if (arg === 'on' || arg === 'off') {
       isOn = arg === 'on'
       await $.store.set('isOn', isOn)
+    } else if (arg === 'plain') {
+      // Redraws every card without its surface modules, to tell whether they are what a surface mis-sizes.
+      const isPlain = !(await read($, plain))
+      await update($, plain, () => isPlain)
+
+      return { text: `Option blocks and row heads are drawn ${isPlain ? 'plain, without' : 'with'} their modules.` }
     } else if (arg === 'debug') {
       return { text: `Stored prose rows: ${stored.join(', ') || 'none'}\nDrawn message rows: ${drawn.join(', ') || 'none'}` }
     } else if (arg !== '') return { text: `Usage: /${COMMAND} [on|off]` }

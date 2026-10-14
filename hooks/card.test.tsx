@@ -95,3 +95,32 @@ test('an option whose instruction strays from its label shows what it will send'
   expect(await ui.find({ type: 'Text', text: 'Sends nothing.', in: 'pick:r9:0:1' })).toBeDefined()
   await ui.unmount()
 })
+
+test('prose drawn during a turn that ends in a report folds into working notes', async ($, on) => {
+  // Stands for the engine's own drawing of a message.
+  on('ui.render', { component: 'AssistantMessage' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>{e.props.text}</Text>
+  })
+  on('turn.start', () => ({ turnId: 't1' }))
+  on('turn.complete', () => ({ text: '' }))
+  const draw = (requestId: string, text: string) =>
+    $.ui.mount({ plugin: 'blocks-only', surface: 'desktop', component: 'AssistantMessage', requestId, props: { text, isFirstOfReply: true } })
+
+  const old = await draw('msg_old-t0', 'From an earlier turn.')
+  await $.turn.start({ text: 'go', turnId: 't1' })
+  const first = await draw('msg_a-t0', 'Looking at the client.')
+  const second = await draw('msg_b-t0', 'Found it.')
+  await $.tool.call({ tool: props.tool, tool_use_id: 'r5', ...props.input })
+  await $.turn.complete({ answer: 'Found it.', reason: 'answer', isAborted: false, turnId: 't1', durationMs: 1 })
+
+  expect(await first.find({ type: 'Button', text: /Working notes · 2 messages/ })).toBeDefined()
+  expect(await first.find({ type: 'Text', text: 'Looking at the client.' })).toBeUndefined()
+  expect(await second.find({ type: 'Text', text: 'Found it.' })).toBeUndefined()
+  expect(await old.find({ type: 'Text', text: 'From an earlier turn.' })).toBeDefined()
+
+  await first.press({ key: 'notes' })
+  expect(await first.find({ type: 'Text', text: 'Looking at the client.' })).toBeDefined()
+  expect(await second.find({ type: 'Text', text: 'Found it.' })).toBeDefined()
+})

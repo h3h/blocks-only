@@ -266,6 +266,9 @@ export const register: Register = (on, options) => {
   // For `/blocks-output debug`: the prose rows the last finished turn stored, and the rows the transcript last drew.
   let stored: string[] = []
   let drawn: string[] = []
+  // Message rows already drawn, so a redraw of an old row is never taken for this turn's prose.
+  const seen = new Set<string>()
+  let isInTurn = false
 
   on('session.start', async ($, e, next) => {
     isOn = (await $.store.get('isOn')) !== false
@@ -309,6 +312,7 @@ export const register: Register = (on, options) => {
 
   on('turn.start', ($, e, next) => {
     turn = { hasUsedTools: false, hasReported: false, strikes: 0, rows: [] }
+    isInTurn = true
 
     return next(e)
   })
@@ -337,16 +341,9 @@ export const register: Register = (on, options) => {
     return { block: `This turn used tools, so it has to end with the ${REPORT} tool. Call it now and write nothing after it.` }
   })
 
-  // The turn's prose rows, so they can fold once the turn ends in a report.
-  on('session.append', { door: 'response' }, ($, e, next) => {
-    const hasText = e.message.content.some(block => block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '')
-    if (e.agentId === undefined && hasText) turn.rows.push(e.uuid)
-
-    return next(e)
-  })
-
   on('turn.complete', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
+    isInTurn = false
     stored = turn.rows
     const head = turn.rows[0]
     if (turn.hasReported && head !== undefined) {
@@ -367,6 +364,11 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (e.surface !== 'desktop') return next(e)
     if (!drawn.includes(e.requestId)) drawn = [...drawn, e.requestId].slice(-8)
+    // The turn's prose rows are the ones first drawn while it runs: the row's id here is the only one a later draw can be matched on.
+    if (!seen.has(e.requestId)) {
+      seen.add(e.requestId)
+      if (isInTurn) turn.rows.push(e.requestId)
+    }
     const all = await read($, notes)
     const head = all.head[e.requestId]
     if (head === undefined) return next(e)
